@@ -6,6 +6,14 @@
 #include <stdlib.h>               // malloc()
 
 
+//Alexei Debugging Memory Leaks
+//uncomment the following macro definition to have messages in the debugger console regarding memory allocations and releases
+//#define ALEXSOFT_MEMLEAKS_PURSUING
+#ifdef ALEXSOFT_MEMLEAKS_PURSUING
+unsigned int AllocCalls = 0;
+unsigned int FreeCalls = 0;
+#endif
+
 /* Defined in tracemalloc.c */
 extern void _PyMem_DumpTraceback(int fd, const void *ptr);
 
@@ -98,7 +106,29 @@ _PyMem_RawMalloc(void *Py_UNUSED(ctx), size_t size)
        To solve these problems, allocate an extra byte. */
     if (size == 0)
         size = 1;
-    return malloc(size);
+
+    void* pv = malloc(size);
+
+#ifdef ALEXSOFT_MEMLEAKS_PURSUING
+    {//Alexei Debugging Memory Leaks
+        char StringBytes[1024 * 2];
+        memset(StringBytes,0, 1024 * 2);
+        if (pv) AllocCalls++;
+        if (AllocCalls == 23)
+        {
+            DWORD D = 0;
+        }
+        if (AllocCalls == 1)
+        {
+            sprintf_s((char*)StringBytes, 1024 * 2, "Address,Size,Routine,Alloc Count,Free Count,Details\n");
+            OutputDebugStringA((char*)StringBytes);
+            memset(StringBytes, 0, 1024 * 2);
+        }
+        sprintf_s((char*)StringBytes, 1024 * 2, "%p, %u, alloc (malloc),%u,%u,\n", pv, (unsigned int)size, (unsigned int)AllocCalls, (unsigned int)FreeCalls);
+        OutputDebugStringA((char*)StringBytes);
+    }
+#endif
+    return pv;
 }
 
 static void *
@@ -112,7 +142,28 @@ _PyMem_RawCalloc(void *Py_UNUSED(ctx), size_t nelem, size_t elsize)
         nelem = 1;
         elsize = 1;
     }
-    return calloc(nelem, elsize);
+    void* pv = calloc(nelem, elsize);
+#ifdef ALEXSOFT_MEMLEAKS_PURSUING
+    {//Alexei Debugging Memory Leaks
+        char StringBytes[1024 * 2];
+        memset(StringBytes, 0, 1024 * 2);
+        if (pv) AllocCalls++;
+        if (AllocCalls == 23)
+        {
+            DWORD D = 0;
+        }
+        if (AllocCalls == 1)
+        {
+            sprintf_s((char*)StringBytes, 1024 * 2, "Address,Size,Routine,Alloc Count,Free Count,Details\n");
+            OutputDebugStringA((char*)StringBytes);
+            memset(StringBytes, 0, 1024 * 2);
+        }
+        sprintf_s((char*)StringBytes, 1024 * 2, "%p, %u, alloc (calloc),%u,%u,\n", pv, (unsigned int)(nelem, elsize), (unsigned int)AllocCalls, (unsigned int)FreeCalls);
+        OutputDebugStringA((char*)StringBytes);
+       
+    }
+#endif
+    return pv;
 }
 
 static void *
@@ -120,12 +171,40 @@ _PyMem_RawRealloc(void *Py_UNUSED(ctx), void *ptr, size_t size)
 {
     if (size == 0)
         size = 1;
-    return realloc(ptr, size);
+
+    void* pv = realloc(ptr, size);
+#ifdef ALEXSOFT_MEMLEAKS_PURSUING 
+    {//Alexei Debugging Memory Leaks
+     //for the porpuse of statistics realloc generate a free record and a new alloc record
+        char StringBytes[1024 * 2];
+        memset(StringBytes, 0, 1024 * 2);
+        //Free record
+        sprintf_s((char*)StringBytes, 1024 * 2, "%p, %u, free (ralloc),%u,%u,%p\n", ptr, (unsigned int)0, (unsigned int)AllocCalls, (unsigned int)(++FreeCalls), NULL);
+        OutputDebugStringA((char*)StringBytes);
+        //alloc record
+        memset(StringBytes, 0, 1024 * 2);
+        sprintf_s((char*)StringBytes, 1024 * 2, "%p, %u, alloc (ralloc),%u,%u,%p\n", pv, (unsigned int)size, (unsigned int)(++AllocCalls), (unsigned int)FreeCalls, NULL);
+        OutputDebugStringA((char*)StringBytes);
+
+    }
+#endif
+    return pv;
 }
 
 static void
 _PyMem_RawFree(void *Py_UNUSED(ctx), void *ptr)
 {
+#ifdef ALEXSOFT_MEMLEAKS_PURSUING 
+    {//Alexei Debugging Memory Leaks
+        void* pv = ptr;
+        char StringBytes[1024 * 2];
+        memset(StringBytes, 0, 1024 * 2);
+        FreeCalls++;
+        sprintf_s((char*)StringBytes, 1024 * 2, "%p, , free,%u,%u,\n", pv, (unsigned int)AllocCalls, (unsigned int)FreeCalls);
+        OutputDebugStringA((char*)StringBytes);
+       
+    }
+#endif
     free(ptr);
 }
 
@@ -134,14 +213,44 @@ _PyMem_RawFree(void *Py_UNUSED(ctx), void *ptr)
 static void *
 _PyObject_ArenaVirtualAlloc(void *Py_UNUSED(ctx), size_t size)
 {
-    return VirtualAlloc(NULL, size,
-                        MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    void *pv = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+#ifdef ALEXSOFT_MEMLEAKS_PURSUING
+    {//Alexei Debugging Memory Leaks
+        char StringBytes[1024 * 2];
+        memset(StringBytes, 0, 1024 * 2);
+        if (pv) AllocCalls++;
+        if (AllocCalls == 24)
+        {
+            DWORD D = 0;
+        }
+        if (AllocCalls == 1)
+        {
+            sprintf_s((char*)StringBytes, 1024 * 2, "Address,Size,Routine,Alloc Count,Free Count,Details\n");
+            OutputDebugStringA((char*)StringBytes);
+            memset(StringBytes, 0, 1024 * 2);
+        }
+        sprintf_s((char*)StringBytes, 1024 * 2, "%p, %u, alloc (Virtualalloc),%u,%u,\n", pv, (unsigned int)(size), (unsigned int)AllocCalls, (unsigned int)FreeCalls);
+        OutputDebugStringA((char*)StringBytes);
+
+    }
+#endif
+    return pv;
 }
 
 static void
 _PyObject_ArenaVirtualFree(void *Py_UNUSED(ctx), void *ptr,
     size_t Py_UNUSED(size))
 {
+#ifdef ALEXSOFT_MEMLEAKS_PURSUING 
+    {//Alexei Debugging Memory Leaks
+        void* pv = ptr;
+        char StringBytes[1024 * 2];
+        memset(StringBytes, 0, 1024 * 2);
+        FreeCalls++;
+        sprintf_s((char*)StringBytes, 1024 * 2, "%p, , free (VirtualFree),%u,%u,\n", pv, (unsigned int)AllocCalls, (unsigned int)FreeCalls);
+        OutputDebugStringA((char*)StringBytes);
+    }
+#endif
     VirtualFree(ptr, 0, MEM_RELEASE);
 }
 
@@ -3115,6 +3224,53 @@ _PyObject_DebugMallocStats(FILE *out)
 #endif
 
     return 1;
+}
+
+/*
+  =========Testing releasing the Py arenas =========
+
+  This functin is ment to be called from within Py_FinalizeEx as last instruction just before returning.
+
+  Attempt to repair the memory leaks seeing when python is embeded.
+*/
+void ____Py_ArenaMemoryRelease()
+{
+    int i1,i2;
+    struct arena_object* pCurrArena = arenas;
+    //OutputDebugStringA("Memory release by calling AlexSoft73_ReleasePy_Arena...\n");
+        
+        //Free memory allocated in request # 24 
+        for (i1 = 0; i1 < MAP_TOP_LENGTH; i1++)
+        {
+            if (arena_map_root.ptrs[i1])
+            {
+                for (i2 = 0; i2 < MAP_MID_LENGTH; i2++)
+                    if (arena_map_root.ptrs[i1]->ptrs[i2]) PyMem_RawFree(arena_map_root.ptrs[i1]->ptrs[i2]);
+                PyMem_RawFree(arena_map_root.ptrs[i1]);//PyMem_RawFree
+            }
+        }
+        //Free memory allocated in request # 23
+        if (pCurrArena)
+        {
+            //move last
+            while (pCurrArena->nextarena) pCurrArena = pCurrArena->nextarena;
+            //do Mem release moving backward
+            while (pCurrArena)
+            {
+                if (pCurrArena->address)  _PyObject_Arena.free(_PyObject_Arena.ctx, pCurrArena->address, 0);
+                pCurrArena = pCurrArena->prevarena;
+            }
+            PyMem_RawFree(arenas);
+
+        }
+        //restore these global variables
+        memset(nfp2lasta, 0, sizeof(void*) * (MAX_POOLS_IN_ARENA + 1));
+        arenas                      = NULL;
+        unused_arena_objects        = NULL;
+        maxarenas                   = 0;
+        narenas_currently_allocated = 0;
+        ntimes_arena_allocated      = 0;
+        narenas_highwater           = 0;
 }
 
 #endif /* #ifdef WITH_PYMALLOC */
