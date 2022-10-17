@@ -107,6 +107,7 @@ _Py_COMP_DIAG_POP
 
 static int runtime_initialized = 0;
 
+
 PyStatus
 _PyRuntime_Initialize(void)
 {
@@ -116,12 +117,17 @@ _PyRuntime_Initialize(void)
        every Py_Initialize() call, but doing so breaks the runtime.
        This is because the runtime state is not properly finalized
        currently. */
+    
+    
     if (runtime_initialized) {
         return _PyStatus_OK();
     }
+    
+    
     runtime_initialized = 1;
+    
 
-    return _PyRuntimeState_Init(&_PyRuntime);
+   return _PyRuntimeState_Init(&_PyRuntime);
 }
 
 void
@@ -919,7 +925,7 @@ _Py_PreInitializeFromPyArgv(const PyPreConfig *src_config, const _PyArgv *args)
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-    _PyRuntimeState *runtime = &_PyRuntime;
+    _PyRuntimeState* runtime = &_PyRuntime;
 
     if (runtime->preinitialized) {
         /* If it's already configured: ignored the new configuration */
@@ -1279,7 +1285,7 @@ Py_InitializeEx(int install_sigs)
     if (_PyStatus_EXCEPTION(status)) {
         Py_ExitStatusException(status);
     }
-    _PyRuntimeState *runtime = &_PyRuntime;
+    _PyRuntimeState* runtime = &_PyRuntime;
 
     if (runtime->initialized) {
         /* bpo-33932: Calling Py_Initialize() twice does nothing. */
@@ -1752,6 +1758,8 @@ finalize_interp_delete(PyInterpreterState *interp)
     PyInterpreterState_Delete(interp);
 }
 
+//defined in obmalloc.c
+extern void ____Py_ArenaMemoryRelease();
 
 int
 Py_FinalizeEx(void)
@@ -1935,6 +1943,17 @@ Py_FinalizeEx(void)
     call_ll_exitfuncs(runtime);
 
     _PyRuntime_Finalize();
+
+    //This has to be the last operation of this function before return
+    /*
+     This function attempt to release the memory allocated for the Python arenas (sort of internal memory manager or python)
+     to achieve this 2 files were modified:
+
+     pylifecycle.c --> call function ____Py_ArenaMemoryRelease
+     obmalloc.c    --> Define function ____Py_ArenaMemoryRelease pluss the trackig of memory allocations and releases
+    */
+    ____Py_ArenaMemoryRelease();
+
     return status;
 }
 
@@ -2924,7 +2943,7 @@ call_ll_exitfuncs(_PyRuntimeState *runtime)
         void (*exitfunc)(void) = runtime->exitfuncs[runtime->nexitfuncs];
         runtime->exitfuncs[runtime->nexitfuncs] = NULL;
 
-        exitfunc();
+        if (exitfunc) exitfunc();
     }
 
     fflush(stdout);
